@@ -29,6 +29,7 @@ services:
   # This service runs the Medusa backend application
   # and the admin dashboard.
   medusa:
+    profiles: ["dev"] # <--- added: only included when using --profile dev
     build: .
     container_name: medusa_backend
     restart: unless-stopped
