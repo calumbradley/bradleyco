@@ -20,7 +20,8 @@ jobs:
             # ensure Docker (and git) are installed on the droplet
             if ! command -v docker >/dev/null 2>&1; then
               apt-get update -y
-              apt-get install -y docker.io docker-compose-plugin git
+              apt-get install -y curl git
+              curl -fsSL https://get.docker.com | sh
               systemctl enable --now docker
             fi
 
