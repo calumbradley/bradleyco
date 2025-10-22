@@ -18,6 +18,11 @@ jobs:
             set -e
             mkdir -p "${{ secrets.REPO_PATH }}"
             cd "${{ secrets.REPO_PATH }}"
+
+            # ensure github.com is in known_hosts to avoid "Host key verification failed"
+            mkdir -p ~/.ssh
+            grep -q github.com ~/.ssh/known_hosts || ssh-keyscan github.com >> ~/.ssh/known_hosts
+
             if [ ! -d .git ]; then
               git clone -b "${{ secrets.BRANCH }}" git@github.com:calumbradley/bradleyco.git .
             else
