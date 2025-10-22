@@ -16,13 +16,26 @@ jobs:
           port: ${{ secrets.DO_SSH_PORT || '22' }}
           script: |
             set -e
+
+            # ensure Docker (and git) are installed on the droplet
+            if ! command -v docker >/dev/null 2>&1; then
+              apt-get update -y
+              apt-get install -y docker.io docker-compose-plugin git
+              systemctl enable --now docker
+            fi
+
             mkdir -p "${{ secrets.REPO_PATH }}"
             cd "${{ secrets.REPO_PATH }}"
+
+            mkdir -p /root/.ssh
+            touch /root/.ssh/known_hosts
+            grep -q github.com /root/.ssh/known_hosts || ssh-keyscan github.com >> /root/.ssh/known_hosts
 
             KEY_PATH=/root/.ssh/bradleyco_github
             if [ ! -f "$KEY_PATH" ]; then
               echo "GitHub deploy key missing at $KEY_PATH"; exit 1;
             fi
+            chmod 600 "$KEY_PATH"
             export GIT_SSH_COMMAND="ssh -i $KEY_PATH -o StrictHostKeyChecking=yes"
 
             if [ ! -d .git ]; then
@@ -31,5 +44,6 @@ jobs:
               git fetch --all
               git reset --hard origin/"${{ secrets.BRANCH }}"
             fi
+
             docker compose -f docker-compose.prod.yml pull || true
             docker compose -f docker-compose.prod.yml up -d --build
