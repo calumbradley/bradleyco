@@ -20,7 +20,7 @@ services:
       - medusa_network
 
   medusa:
-    build: .
+    image: ghcr.io/calumbradley/bradleyco/medusa:latest
     container_name: medusa_backend_prod
     restart: unless-stopped
     depends_on:

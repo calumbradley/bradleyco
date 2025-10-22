@@ -17,7 +17,6 @@ jobs:
           script: |
             set -e
 
-            # ensure Docker (and git) are installed on the droplet
             if ! command -v docker >/dev/null 2>&1; then
               apt-get update -y
               apt-get install -y curl git
@@ -25,12 +24,12 @@ jobs:
               systemctl enable --now docker
             fi
 
+            if [ -n "${{ secrets.GHCR_TOKEN }}" ] && [ -n "${{ secrets.GHCR_USERNAME }}" ]; then
+              echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            fi
+
             mkdir -p "${{ secrets.REPO_PATH }}"
             cd "${{ secrets.REPO_PATH }}"
-
-            mkdir -p /root/.ssh
-            touch /root/.ssh/known_hosts
-            grep -q github.com /root/.ssh/known_hosts || ssh-keyscan github.com >> /root/.ssh/known_hosts
 
             KEY_PATH=/root/.ssh/bradleyco_github
             if [ ! -f "$KEY_PATH" ]; then
@@ -46,5 +45,5 @@ jobs:
               git reset --hard origin/"${{ secrets.BRANCH }}"
             fi
 
-            docker compose -f docker-compose.prod.yml pull || true
-            docker compose -f docker-compose.prod.yml up -d --build
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
