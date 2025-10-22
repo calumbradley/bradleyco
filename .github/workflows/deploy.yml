@@ -19,9 +19,11 @@ jobs:
             mkdir -p "${{ secrets.REPO_PATH }}"
             cd "${{ secrets.REPO_PATH }}"
 
-            # ensure github.com is in known_hosts to avoid "Host key verification failed"
-            mkdir -p ~/.ssh
-            grep -q github.com ~/.ssh/known_hosts || ssh-keyscan github.com >> ~/.ssh/known_hosts
+            KEY_PATH=/root/.ssh/bradleyco_github
+            if [ ! -f "$KEY_PATH" ]; then
+              echo "GitHub deploy key missing at $KEY_PATH"; exit 1;
+            fi
+            export GIT_SSH_COMMAND="ssh -i $KEY_PATH -o StrictHostKeyChecking=yes"
 
             if [ ! -d .git ]; then
               git clone -b "${{ secrets.BRANCH }}" git@github.com:calumbradley/bradleyco.git .
