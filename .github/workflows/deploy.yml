@@ -63,3 +63,11 @@ jobs:
 
             # Show current container status to aid debugging
             docker compose -f docker-compose.prod.yml ps
+
+            # Export only the vars Traefik/compose need for HTTPS
+            export MEDUSA_DOMAIN='${{ vars.MEDUSA_DOMAIN }}'   # e.g. api.example.com
+            export ACME_EMAIL='${{ vars.ACME_EMAIL }}'         # e.g. ops@example.com
+
+            # Pull and start; compose will substitute ${MEDUSA_DOMAIN}/${ACME_EMAIL} from env
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans

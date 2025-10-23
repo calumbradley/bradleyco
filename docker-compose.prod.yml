@@ -83,8 +83,34 @@ services:
     networks:
       - medusa_network
 
+  # Reverse proxy + Let's Encrypt (automatic HTTPS)
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      # watch Docker and don’t auto-expose everything
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      # entrypoints for HTTP and HTTPS
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Let's Encrypt (HTTP-01 challenge via port 80)
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL} # email from env
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json # persisted certs
+    ports:
+      - "80:80" # public HTTP
+      - "443:443" # public HTTPS
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro # read-only Docker socket
+      - traefik_letsencrypt:/letsencrypt # persist ACME certs
+    networks:
+      - medusa_network
+
 volumes:
   postgres_data_prod:
+  traefik_letsencrypt: # stores Let's Encrypt certificates
 
 networks:
   medusa_network:
