@@ -15,29 +15,34 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.DO_SSH_PORT || '22' }}
           script: |
-            set -e
+            # exit on error; safer bash flags
+            set -euo pipefail
 
+            # 1) Require Docker to already be installed on the droplet (fail fast if missing)
             if ! command -v docker >/dev/null 2>&1; then
-              apt-get update -y
-              apt-get install -y curl git
-              curl -fsSL https://get.docker.com | sh
-              systemctl enable --now docker
+              echo "Docker is not installed on the droplet. Please install Docker or re-enable install step." >&2
+              exit 1
             fi
 
-            if [ -n "${{ secrets.GHCR_TOKEN }}" ] && [ -n "${{ secrets.GHCR_USERNAME }}" ]; then
-              echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            fi
-
+            # 2) Prepare working directory where repo lives
             mkdir -p "${{ secrets.REPO_PATH }}"
             cd "${{ secrets.REPO_PATH }}"
 
+            # 3) Trust github.com host key to avoid SSH host key prompts
+            mkdir -p /root/.ssh
+            touch /root/.ssh/known_hosts
+            grep -q github.com /root/.ssh/known_hosts || ssh-keyscan github.com >> /root/.ssh/known_hosts
+
+            # 4) Use pre-provisioned deploy key on the droplet for git@github.com access
             KEY_PATH=/root/.ssh/bradleyco_github
             if [ ! -f "$KEY_PATH" ]; then
-              echo "GitHub deploy key missing at $KEY_PATH"; exit 1;
+              echo "GitHub deploy key missing at $KEY_PATH" >&2
+              exit 1
             fi
             chmod 600 "$KEY_PATH"
             export GIT_SSH_COMMAND="ssh -i $KEY_PATH -o StrictHostKeyChecking=yes"
 
+            # 5) Clone or update repo on desired branch
             if [ ! -d .git ]; then
               git clone -b "${{ secrets.BRANCH }}" git@github.com:calumbradley/bradleyco.git .
             else
@@ -45,5 +50,6 @@ jobs:
               git reset --hard origin/"${{ secrets.BRANCH }}"
             fi
 
+            # 6) Pull latest prebuilt images and start without rebuilding
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
