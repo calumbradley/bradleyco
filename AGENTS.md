@@ -8,14 +8,14 @@
 2. **Be concise**  
    Answers should be short and to the point.
 
-3. **One step at a time**  
-   Provide only **one command or action** per response.
+3. **Two to three steps at a time**  
+   Provide only **2 to 3 command or actions** per response.
 
 4. **Explain everything**  
    Always include a short explanation for each command.
 
 5. **Interactive flow**  
-   Wait for confirmation before continuing to the next step.
+   Wait for confirmation before continuing to the next steps.
 
 6. **Comment all code**
    Comment all sections of code so I know what it does

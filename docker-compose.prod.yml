@@ -1,4 +1,5 @@
 services:
+  # --- PostgreSQL (unchanged) ---
   postgres:
     image: postgres:15-alpine
     container_name: medusa_postgres_prod
@@ -12,6 +13,7 @@ services:
     networks:
       - medusa_network
 
+  # --- Redis (unchanged) ---
   redis:
     image: redis:7-alpine
     container_name: medusa_redis_prod
@@ -19,21 +21,65 @@ services:
     networks:
       - medusa_network
 
-  medusa:
-    image: ghcr.io/calumbradley/bradleyco/medusa:latest
+  # --- Medusa (server mode) ---
+  medusa-server:
+    image: ghcr.io/calumbradley/bradleyco/medusa:latest # prebuilt image from CI
     container_name: medusa_backend_prod
     restart: unless-stopped
     depends_on:
       - postgres
       - redis
     ports:
-      - "9000:9000"
+      - "9000:9000" # expose API + Admin
     environment:
+      # Required envs (from docs)
+      - NODE_ENV=production
+      - PORT=9000
+      - DATABASE_URL=postgres://medusa:medusa@postgres:5432/medusa
+      - REDIS_URL=redis://redis:6379
+      - COOKIE_SECRET=${COOKIE_SECRET:-supersecret} # TODO: set strong secret via env
+      - JWT_SECRET=${JWT_SECRET:-supersecret} # TODO: set strong secret via env
+
+      # CORS and backendUrl (update with your domains/URL)
+      - STORE_CORS=${STORE_CORS:-http://localhost:8000}
+      - ADMIN_CORS=${ADMIN_CORS:-http://localhost:9000}
+      - AUTH_CORS=${AUTH_CORS:-http://localhost:8000,http://localhost:9000}
+      - MEDUSA_BACKEND_URL=${MEDUSA_BACKEND_URL:-http://localhost:9000}
+
+      # Server instance config
+      - DISABLE_MEDUSA_ADMIN=false
+      - MEDUSA_WORKER_MODE=server
+    # Run from built output, install deps if missing, then predeploy + start
+    command: >
+      sh -lc 'cd .medusa/server &&
+              [ -d node_modules ] || npm ci --omit=dev &&
+              npm run predeploy &&
+              npm run start'
+    networks:
+      - medusa_network
+
+  # --- Medusa (worker mode) ---
+  medusa-worker:
+    image: ghcr.io/calumbradley/bradleyco/medusa:latest # same image
+    container_name: medusa_worker_prod
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      # Required envs (from docs)
       - NODE_ENV=production
       - DATABASE_URL=postgres://medusa:medusa@postgres:5432/medusa
       - REDIS_URL=redis://redis:6379
-      # - MEDUSA_ADMIN_DISABLED=true    # remove/keep commented to serve Admin UI
-    # no bind mounts in prod so image contains the code and Dockerfile CMD runs ./start.sh
+
+      # Worker instance config
+      - DISABLE_MEDUSA_ADMIN=true
+      - MEDUSA_WORKER_MODE=worker
+    # Worker runs from built output; no predeploy here
+    command: >
+      sh -lc 'cd .medusa/server &&
+              [ -d node_modules ] || npm ci --omit=dev &&
+              npm run start'
     networks:
       - medusa_network
 

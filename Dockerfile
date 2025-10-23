@@ -1,21 +1,28 @@
-# Development Dockerfile for Medusa
+# Base Node image (alpine for small footprint)
 FROM node:20-alpine
 
-# Set working directory
+# All paths below are relative to /server
 WORKDIR /server
 
-# Install dependencies
+# 1) Install deps needed to BUILD the project (includes dev deps)
+#    Use package-lock to ensure reproducible installs
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copy source code
+# 2) Copy the full source (server + admin) into the image
 COPY . .
 
-# Build backend + Admin UI at image build time
+# 3) Build production artifacts (per Medusa docs: `medusa build`)
+#    - Produces .medusa/server and the Admin UI build
 RUN npm run build
 
-# Expose the port Medusa runs on
+# 4) Install ONLY runtime deps for the built server package
+#    - The built server has its own package.json in .medusa/server
+RUN cd .medusa/server && npm ci --omit=dev
+
+# 5) Container runtime configuration
+ENV NODE_ENV=production
 EXPOSE 9000
 
-# Start with migrations and then the development server
-CMD ["./start.sh"]
+# 6) Start from the built server output (serves API + Admin in prod)
+CMD ["sh", "-lc", "cd .medusa/server && npm run start"]
