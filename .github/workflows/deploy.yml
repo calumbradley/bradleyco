@@ -15,25 +15,25 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.DO_SSH_PORT || '22' }}
           script: |
-            # exit on error; safer bash flags
+            # Strict mode: exit on error, undefined vars, or pipe failures
             set -euo pipefail
 
-            # 1) Require Docker to already be installed on the droplet (fail fast if missing)
+            # Ensure Docker exists on the droplet; fail fast if not
             if ! command -v docker >/dev/null 2>&1; then
               echo "Docker is not installed on the droplet. Please install Docker or re-enable install step." >&2
               exit 1
             fi
 
-            # 2) Prepare working directory where repo lives
+            # Prepare working directory where the repo lives
             mkdir -p "${{ secrets.REPO_PATH }}"
             cd "${{ secrets.REPO_PATH }}"
 
-            # 3) Trust github.com host key to avoid SSH host key prompts
+            # Trust github.com host key (avoids prompt on first SSH connection)
             mkdir -p /root/.ssh
             touch /root/.ssh/known_hosts
             grep -q github.com /root/.ssh/known_hosts || ssh-keyscan github.com >> /root/.ssh/known_hosts
 
-            # 4) Use pre-provisioned deploy key on the droplet for git@github.com access
+            # Use pre-provisioned deploy key on the droplet for git@github.com access
             KEY_PATH=/root/.ssh/bradleyco_github
             if [ ! -f "$KEY_PATH" ]; then
               echo "GitHub deploy key missing at $KEY_PATH" >&2
@@ -42,7 +42,7 @@ jobs:
             chmod 600 "$KEY_PATH"
             export GIT_SSH_COMMAND="ssh -i $KEY_PATH -o StrictHostKeyChecking=yes"
 
-            # 5) Clone or update repo on desired branch
+            # Clone or update repo on desired branch
             if [ ! -d .git ]; then
               git clone -b "${{ secrets.BRANCH }}" git@github.com:calumbradley/bradleyco.git .
             else
@@ -50,6 +50,16 @@ jobs:
               git reset --hard origin/"${{ secrets.BRANCH }}"
             fi
 
-            # 6) Pull latest prebuilt images and start without rebuilding
+            # Clean up any old containers with conflicting names (prevents "name already in use" errors)
+            # - medusa_backend_prod: server container name in compose
+            # - medusa_worker_prod:  worker container name in compose
+            docker rm -f medusa_backend_prod medusa_worker_prod >/dev/null 2>&1 || true
+
+            # Pull latest prebuilt images from GHCR (image should be public) and start the stack
             docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
+
+            # Start containers and remove any orphaned containers from previous compose layouts
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Show current container status to aid debugging
+            docker compose -f docker-compose.prod.yml ps
