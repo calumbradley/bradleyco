@@ -39,11 +39,6 @@ jobs:
               git reset --hard origin/"${{ secrets.BRANCH }}"
             fi
 
-            # inject only the vars Traefik needs (used by compose labels/flags)
-            export MEDUSA_DOMAIN='${{ vars.MEDUSA_DOMAIN }}'   # backend domain for HTTPS
-            export ACME_EMAIL='${{ vars.ACME_EMAIL }}'         # Let's Encrypt account email
-            echo "Debug: ACME_EMAIL is set to: $ACME_EMAIL"    # Temporary debug: confirm the variable is exported
-
             # start stack once and clear orphans (no duplicate pull/up)
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans

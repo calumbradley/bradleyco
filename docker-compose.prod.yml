@@ -57,6 +57,21 @@ services:
               npm run start'
     networks:
       - medusa_network
+    labels:
+      # Enable Traefik for this service
+      - traefik.enable=true
+      # HTTP router: redirect to HTTPS
+      - traefik.http.routers.medusa-http.rule=Host(`api.bradleyfragrance.com`) # hardcoded domain
+      - traefik.http.routers.medusa-http.entrypoints=web
+      - traefik.http.routers.medusa-http.middlewares=redirect-to-https
+      # HTTPS router: secure traffic
+      - traefik.http.routers.medusa-https.rule=Host(`api.bradleyfragrance.com`) # hardcoded domain
+      - traefik.http.routers.medusa-https.entrypoints=websecure
+      - traefik.http.routers.medusa-https.tls.certresolver=le
+      # Service definition
+      - traefik.http.services.medusa.loadbalancer.server.port=9000
+      # Middleware for redirect
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
 
   # --- Medusa (worker mode) ---
   medusa-worker:
@@ -97,7 +112,7 @@ services:
       - --entrypoints.websecure.address=:443
       # Let's Encrypt (HTTP-01 challenge via port 80)
       - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
-      - --certificatesresolvers.le.acme.email=${ACME_EMAIL} # email from env
+      - --certificatesresolvers.le.acme.email=admin@bradleyfragrance.com # hardcoded email for Let's Encrypt
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json # persisted certs
     ports:
       - "80:80" # public HTTP
