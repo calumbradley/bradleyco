@@ -15,34 +15,23 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.DO_SSH_PORT || '22' }}
           script: |
-            # Strict mode: exit on error, undefined vars, or pipe failures
+            # fail fast
             set -euo pipefail
 
-            # Ensure Docker exists on the droplet; fail fast if not
-            if ! command -v docker >/dev/null 2>&1; then
-              echo "Docker is not installed on the droplet. Please install Docker or re-enable install step." >&2
-              exit 1
-            fi
+            # ensure Docker exists
+            command -v docker >/dev/null 2>&1 || { echo "Docker missing on droplet"; exit 1; }
 
-            # Prepare working directory where the repo lives
+            # repo setup
             mkdir -p "${{ secrets.REPO_PATH }}"
             cd "${{ secrets.REPO_PATH }}"
-
-            # Trust github.com host key (avoids prompt on first SSH connection)
-            mkdir -p /root/.ssh
-            touch /root/.ssh/known_hosts
+            mkdir -p /root/.ssh && touch /root/.ssh/known_hosts
             grep -q github.com /root/.ssh/known_hosts || ssh-keyscan github.com >> /root/.ssh/known_hosts
-
-            # Use pre-provisioned deploy key on the droplet for git@github.com access
             KEY_PATH=/root/.ssh/bradleyco_github
-            if [ ! -f "$KEY_PATH" ]; then
-              echo "GitHub deploy key missing at $KEY_PATH" >&2
-              exit 1
-            fi
+            [ -f "$KEY_PATH" ] || { echo "Missing deploy key at $KEY_PATH"; exit 1; }
             chmod 600 "$KEY_PATH"
             export GIT_SSH_COMMAND="ssh -i $KEY_PATH -o StrictHostKeyChecking=yes"
 
-            # Clone or update repo on desired branch
+            # sync repo
             if [ ! -d .git ]; then
               git clone -b "${{ secrets.BRANCH }}" git@github.com:calumbradley/bradleyco.git .
             else
@@ -50,24 +39,13 @@ jobs:
               git reset --hard origin/"${{ secrets.BRANCH }}"
             fi
 
-            # Clean up any old containers with conflicting names (prevents "name already in use" errors)
-            # - medusa_backend_prod: server container name in compose
-            # - medusa_worker_prod:  worker container name in compose
-            docker rm -f medusa_backend_prod medusa_worker_prod >/dev/null 2>&1 || true
+            # inject only the vars Traefik needs (used by compose labels/flags)
+            export MEDUSA_DOMAIN='${{ vars.MEDUSA_DOMAIN }}'   # backend domain for HTTPS
+            export ACME_EMAIL='${{ vars.ACME_EMAIL }}'         # Let's Encrypt account email
 
-            # Pull latest prebuilt images from GHCR (image should be public) and start the stack
+            # start stack once and clear orphans (no duplicate pull/up)
             docker compose -f docker-compose.prod.yml pull
-
-            # Start containers and remove any orphaned containers from previous compose layouts
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-            # Show current container status to aid debugging
+            # show status
             docker compose -f docker-compose.prod.yml ps
-
-            # Export only the vars Traefik/compose need for HTTPS
-            export MEDUSA_DOMAIN='${{ vars.MEDUSA_DOMAIN }}'   # e.g. api.example.com
-            export ACME_EMAIL='${{ vars.ACME_EMAIL }}'         # e.g. ops@example.com
-
-            # Pull and start; compose will substitute ${MEDUSA_DOMAIN}/${ACME_EMAIL} from env
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
