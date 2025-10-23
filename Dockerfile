@@ -4,14 +4,15 @@ FROM node:20-alpine
 # Set working directory
 WORKDIR /server
 
-# Copy package files and npm config
+# Install dependencies
 COPY package.json package-lock.json ./
-
-# Install all dependencies using npm
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .
+
+# Build backend + Admin UI at image build time
+RUN npm run build
 
 # Expose the port Medusa runs on
 EXPOSE 9000
